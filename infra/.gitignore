@@ -1,0 +1,9 @@
+# CDK
+cdk.out/
+.cdk.staging/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

@@ -1,6 +1,6 @@
 # Ekoparty Guardrails Demo
 
-Demo reproducible que acompaña al artículo **"Guardrails en las herramientas:
+Demo reproducible que acompaña al artículo **"Guardrails más allá del modelo:
 cierra la brecha que tu agente deja abierta"** y a la charla de Ekoparty 2026
 *"Tu agente obedece a cualquiera"*.
 
@@ -45,6 +45,12 @@ ekoparty-guardrails-demo/
 ├── agente_seguro.py      # Agente CON hook — muestra el bloqueo
 ├── attack_doc.txt        # "Documento externo" con la inyección indirecta
 ├── requirements.txt
+├── infra/                # CDK (Python) que crea los dos guardrails en AWS
+│   ├── app.py
+│   ├── cdk.json
+│   ├── requirements.txt
+│   └── guardrails_demo/
+│       └── guardrails_stack.py
 └── README.md
 ```
 
@@ -52,15 +58,44 @@ ekoparty-guardrails-demo/
 
 - Una cuenta de AWS con acceso a Amazon Bedrock y el modelo **Amazon Nova Pro**
   habilitado (`us.amazon.nova-pro-v1:0`) en `us-east-1`.
-- Un [Amazon Bedrock Guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html)
-  creado, con detección de PII y filtro de contenido. Anota su `guardrail_id` y
-  su versión (usa `DRAFT` para pruebas). Para la demo con guardrails distintos
-  por herramienta, crea dos (uno para `web_search`, otro para `get_customer_data`).
 - Python 3.11 o superior.
-- Credenciales de AWS configuradas con permisos `bedrock:ApplyGuardrail` y
-  `bedrock:InvokeModel`.
+- [Node.js](https://nodejs.org/) y el [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
+  (`npm install -g aws-cdk`) para crear los guardrails.
+- Credenciales de AWS configuradas con permisos para crear guardrails de Bedrock
+  (CloudFormation + `bedrock:CreateGuardrail`), y para correr la demo,
+  `bedrock:ApplyGuardrail` y `bedrock:InvokeModel`.
 
-## Instalación
+Los dos guardrails que necesita la demo (uno para `web_search`, otro para
+`get_customer_data`) los crea el stack de CDK en `infra/`. No hace falta crearlos
+a mano en la consola.
+
+## Crear los recursos en AWS (CDK)
+
+El stack `infra/` despliega dos [Amazon Bedrock Guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html):
+
+- `ekoparty-websearch`: filtro de contenido, para la salida de `web_search`.
+- `ekoparty-customerdata`: detección de PII (email, tarjeta, SSN, teléfono), para
+  los parámetros de `get_customer_data`.
+
+```bash
+cd infra
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Solo la primera vez en la cuenta/región:
+cdk bootstrap
+
+cdk deploy
+```
+
+Al terminar, el deploy imprime tres salidas: `WebSearchGuardrailId`,
+`CustomerDataGuardrailId` y `GuardrailVersion`. Los vas a usar en el paso
+siguiente.
+
+## Instalar la demo
+
+Desde la raíz del repo (no desde `infra/`):
 
 ```bash
 python3 -m venv .venv
@@ -81,11 +116,11 @@ tarjeta del cliente. **El camino feliz es inseguro.**
 
 ### 2. El ataque se corta (con el GuardrailHook)
 
-Primero exporta los IDs de tus guardrails:
+Exporta los IDs que imprimió `cdk deploy`:
 
 ```bash
-export GR_WEBSEARCH_ID="tu-guardrail-id-para-web-search"
-export GR_CUSTOMERDATA_ID="tu-guardrail-id-para-datos-de-cliente"
+export GR_WEBSEARCH_ID="<WebSearchGuardrailId>"
+export GR_CUSTOMERDATA_ID="<CustomerDataGuardrailId>"
 export GR_VERSION="DRAFT"
 ```
 
@@ -103,6 +138,42 @@ pasar PII a `get_customer_data`, el checkpoint 2 cancela la llamada.
 
 - `agente_inseguro.py`: la respuesta final contiene el email y la tarjeta (ataque exitoso).
 - `agente_seguro.py`: la respuesta final contiene el mensaje de bloqueo del guardrail, no la PII.
+
+## Costos
+
+Esta demo usa servicios de pago por uso. Tenlo en cuenta antes de desplegar:
+
+- **Crear los guardrails con CDK no genera cargo por sí mismo.** Amazon Bedrock
+  Guardrails se cobra por uso, cuando llamas a `ApplyGuardrail`, no por tener el
+  guardrail creado. Un guardrail inactivo en tu cuenta no cuesta nada.
+- **Correr la demo sí genera cargos**, pequeños pero reales: cada corrida invoca
+  el modelo Amazon Nova Pro (se cobra por tokens de entrada y salida) y evalúa el
+  contenido con los guardrails (se cobra por unidad de texto, separado por filtro
+  de contenido y por detección de PII). Para unas pocas corridas de prueba el
+  costo es de centavos, pero depende de tu región y del volumen.
+- El stack de CDK **no crea recursos con costo fijo mensual** (no hay VPC, NAT,
+  endpoints ni nada que cobre por hora). Solo crea los dos guardrails.
+- Consulta los precios vigentes en [Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/)
+  (secciones de Guardrails y de los modelos Amazon Nova) antes de correr la demo a
+  gran escala.
+
+## Destruir los recursos
+
+Cuando termines, borra todo para no dejar nada en la cuenta:
+
+```bash
+cd infra
+source .venv/bin/activate   # si no está activo
+cdk destroy
+```
+
+`cdk destroy` elimina los dos guardrails (es el único recurso que creó el stack).
+Confirma con `y` cuando lo pida. Después de esto no queda nada de la demo en tu
+cuenta de AWS.
+
+Si corriste `cdk bootstrap` solo para esta demo y no lo usas para nada más,
+puedes borrar también el stack `CDKToolkit` desde la consola de CloudFormation.
+Si usas CDK para otros proyectos, déjalo.
 
 ## Notas
 
