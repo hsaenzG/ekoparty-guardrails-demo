@@ -61,6 +61,11 @@ class GuardrailHook(HookProvider):
                 for block in msg.get("content", []):
                     text = block.get("text", "")
                     if text and not self._check(text):
+                        print(
+                            "\n[GUARDRAIL] Checkpoint 1 (entrada) BLOQUEO la peticion "
+                            "del usuario antes de llegar al modelo.",
+                            flush=True,
+                        )
                         event.messages.clear()
                         event.messages.append({
                             "role": "user",
@@ -74,9 +79,15 @@ class GuardrailHook(HookProvider):
     async def validate_input(self, event: BeforeToolCallEvent):
         if self.tool_names and event.tool_use.get("name") not in self.tool_names:
             return
+        tool_name = event.tool_use.get("name")
         tool_input = event.tool_use.get("input", {})
         for param_value in tool_input.values():
             if isinstance(param_value, str) and not self._check(param_value):
+                print(
+                    f"\n[GUARDRAIL] Checkpoint 2 (parametros) BLOQUEO la llamada a "
+                    f"'{tool_name}': un parametro no paso el guardrail.",
+                    flush=True,
+                )
                 event.cancel_tool = "This request was blocked by a safety guardrail."
                 return
 
@@ -85,6 +96,7 @@ class GuardrailHook(HookProvider):
     async def validate_output(self, event: AfterToolCallEvent):
         if self.tool_names and event.tool_use.get("name") not in self.tool_names:
             return
+        tool_name = event.tool_use.get("name")
         content_parts = [
             block["text"]
             for block in event.result.get("content", [])
@@ -92,6 +104,11 @@ class GuardrailHook(HookProvider):
         ]
         content = "\n".join(content_parts)
         if content and not self._check(content, source="OUTPUT"):
+            print(
+                f"\n[GUARDRAIL] Checkpoint 3 (salida) BLOQUEO el resultado de "
+                f"'{tool_name}': el contenido no paso el guardrail.",
+                flush=True,
+            )
             event.result = {
                 "toolUseId": event.result["toolUseId"],
                 "status": "error",

@@ -33,7 +33,8 @@ lo atrapa: nunca pasó por la entrada del modelo como prompt del usuario.
 | 2. Herramienta | Los parámetros antes de ejecutar la herramienta | `BeforeToolCallEvent` |
 | 3. Salida | El resultado que devuelve la herramienta | `AfterToolCallEvent` |
 
-Todo vive en `guardrail_hook.py`, en una sola clase `GuardrailHook`.
+Todo vive en `guardrail_hook.py`, en una sola clase `GuardrailHook`. Cada
+checkpoint imprime en consola cuando interviene, con el prefijo `[GUARDRAIL]`.
 
 ## Estructura
 
@@ -57,7 +58,7 @@ ekoparty-guardrails-demo/
 ## Prerrequisitos
 
 - Una cuenta de AWS con acceso a Amazon Bedrock y el modelo **Amazon Nova Pro**
-  habilitado (`us.amazon.nova-pro-v1:0`) en `us-east-1`.
+  habilitado (`us.amazon.nova-pro-v1:0`) en `us-east-2`.
 - Python 3.11 o superior.
 - [Node.js](https://nodejs.org/) y el [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
   (`npm install -g aws-cdk`) para crear los guardrails.
@@ -124,15 +125,28 @@ export GR_CUSTOMERDATA_ID="<CustomerDataGuardrailId>"
 export GR_VERSION="DRAFT"
 ```
 
-Luego corre el agente seguro:
+Luego corre el agente seguro. Acepta un argumento (`1`, `2` o `3`) que elige qué
+checkpoint demostrar; sin argumento usa el `3` por defecto:
 
 ```bash
-python agente_seguro.py
+python agente_seguro.py 1   # Checkpoint 1 — bloquea la ENTRADA del usuario
+python agente_seguro.py 2   # Checkpoint 2 — bloquea los PARAMETROS de get_customer_data
+python agente_seguro.py 3   # Checkpoint 3 — bloquea la SALIDA de web_search (default)
 ```
 
-Ahora el resultado de `web_search` se valida en el checkpoint 3 y se reemplaza
-por un mensaje de bloqueo antes de llegar al modelo. Si el modelo igual intenta
-pasar PII a `get_customer_data`, el checkpoint 2 cancela la llamada.
+Cada opción usa un prompt distinto, pensado para disparar un checkpoint:
+
+- **`1` — Entrada.** El prompt del usuario pide contenido de odio/violencia. El
+  content filter lo bloquea en `validate_inbound` antes de que el modelo lo vea.
+- **`2` — Parámetros.** El prompt mete PII (email + tarjeta) como `customer_id`.
+  Cuando el modelo intenta llamar `get_customer_data` con ese parámetro, el
+  guardrail de PII cancela la llamada en `validate_input`.
+- **`3` — Salida.** El prompt es inocente; el ataque vive en el contenido externo
+  que trae `web_search`. El guardrail valida ese resultado en `validate_output` y
+  lo reemplaza por un mensaje de bloqueo antes de llegar al modelo.
+
+En cada caso verás en consola la línea `[GUARDRAIL] Checkpoint N ...` indicando
+qué checkpoint intervino, y la respuesta final no contendrá la PII.
 
 ## Criterio de éxito
 

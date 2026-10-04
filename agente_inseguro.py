@@ -13,7 +13,7 @@ from strands.models import BedrockModel
 
 from tools import web_search, get_customer_data
 
-REGION = "us-east-1"
+REGION = "us-east-2"
 MODEL_ID = "us.amazon.nova-pro-v1:0"
 
 model = BedrockModel(model_id=MODEL_ID, region_name=REGION)

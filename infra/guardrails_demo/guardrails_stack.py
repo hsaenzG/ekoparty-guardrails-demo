@@ -43,7 +43,9 @@ class GuardrailsStack(Stack):
                     bedrock.CfnGuardrail.ContentFilterConfigProperty(
                         type=filter_type,
                         input_strength="HIGH",
-                        output_strength="HIGH",
+                        # PROMPT_ATTACK solo aplica al input; Bedrock exige
+                        # output_strength=NONE para esta categoria.
+                        output_strength="NONE" if filter_type == "PROMPT_ATTACK" else "HIGH",
                     )
                     for filter_type in CONTENT_FILTER_TYPES
                 ]

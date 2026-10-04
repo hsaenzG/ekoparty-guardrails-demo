@@ -20,7 +20,7 @@ GuardrailsStack(
     app,
     "EkopartyGuardrailsDemo",
     description="Amazon Bedrock Guardrails para la demo de guardrails en las herramientas (Ekoparty 2026).",
-    env=cdk.Environment(region="us-east-1"),
+    env=cdk.Environment(region="us-east-2"),
 )
 
 app.synth()
